@@ -1,54 +1,51 @@
-# Knowledge Graph Entropy Detection System
+# Entropy-Based Sentence Boundary Detection
 
-An advanced system for detecting sentence boundaries in knowledge graphs using entropy-based traversal algorithms, inspired by the BLT (Byte Latent Tokenizer) model.
-
-## 🎯 Problem Statement
-
-This project addresses the hackathon challenge: "Detecting Sentence Boundaries in a Knowledge Graph via Entropy" - building an Entropy Detection Model that traverses a Knowledge Graph derived from text and determines where sentences end using only graph structure and semantics.
-
-## 🌟 Features
-
-### Core Functionality
-- **SVO Triplet Extraction**: Automatically extracts Subject-Verb-Object triplets from text using advanced NLP
-- **Knowledge Graph Construction**: Builds directed graphs with entities as nodes and relationships as edges
-- **Entropy-Based Traversal**: Implements BLT-inspired entropy calculations for boundary detection
-- **Interactive Visualization**: Real-time graph visualization with traversal animation
-- **Project Gutenberg Integration**: Direct loading of texts like War and Peace
-
-### Advanced Algorithms
-- **BLT-Inspired Entropy Model**: Adapted from "Byte Latent Tokenizer" paper for word-level tokenization
-- **Multi-Factor Entropy Calculation**: Considers sentence distribution, degree centrality, and semantic coherence
-- **Intelligent Stopping Conditions**: Dynamic threshold-based boundary detection
-- **Graph Neural Network Features**: Centrality metrics and structural analysis
-
-### Evaluation Metrics
-- **F1-Score**: Precision and recall for sentence node groupings
-- **Boundary Precision**: Accuracy of stopping at correct nodes
-- **Traversal Efficiency**: Optimization of path exploration
-- **Entropy Model Innovation**: Novel entropy estimation techniques
+Frontend React application for the Knowledge Graph Entropy Detection System.
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 - Node.js 18+
-- Python 3.8+
-- pip package manager
+- Python 3.9+ (for backend)
 
 ### Installation
-
-1. **Install Python Dependencies**:
-```bash
-cd python
-pip install -r requirements.txt
-python -m spacy download en_core_web_sm
-```
-
-2. **Install Frontend Dependencies**:
 ```bash
 npm install
 ```
 
-3. **Start the Backend Server**:
+### Development
+```bash
+npm run dev
+# App runs on http://localhost:5174
+```
+
+### Backend
+The Flask backend must be running on http://localhost:5001:
+```bash
+cd python
+python3 app.py
+```
+
+## 🎯 Features
+
+- Interactive knowledge graph visualization
+- Real-time entropy-based coloring
+- Hover tooltips with entropy scores
+- Traversal control panel
+- Comprehensive evaluation metrics
+- Responsive modern UI
+
+## 🛠️ Technologies
+
+- React 18 + TypeScript
+- Vite for build tooling
+- Tailwind CSS for styling
+- Framer Motion for animations
+- D3.js for graph visualization
+
+---
+
+See main README.md for complete project documentation.
 ```bash
 cd python
 python app.py

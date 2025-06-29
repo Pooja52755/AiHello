@@ -4,7 +4,9 @@ import logging
 from kg_builder import KnowledgeGraphBuilder
 from entropy_detector import EntropyDetector
 from text_processor import TextProcessor
+from node_embeddings import embedding_generator
 import json
+import os
 
 app = Flask(__name__)
 CORS(app)
@@ -44,16 +46,22 @@ def process_text():
         # Calculate initial entropy values
         entropy_data = entropy_detector.calculate_initial_entropy(kg_data)
         
+        # Create JSON-serializable graph data (exclude NetworkX object)
+        graph_for_api = {
+            'nodes': kg_data['graph']['nodes'],
+            'edges': kg_data['graph']['edges']
+        }
+        
         response = {
             "sentences": sentences,
             "triplets": triplets,
-            "graph": kg_data,
+            "graph": graph_for_api,
             "entropy": entropy_data,
             "stats": {
                 "num_sentences": len(sentences),
                 "num_triplets": len(triplets),
-                "num_nodes": len(kg_data.get('nodes', [])),
-                "num_edges": len(kg_data.get('edges', []))
+                "num_nodes": len(kg_data['graph']['nodes']),
+                "num_edges": len(kg_data['graph']['edges'])
             }
         }
         
@@ -69,10 +77,68 @@ def traverse_graph():
         data = request.json
         graph_data = data.get('graph', {})
         starting_nodes = data.get('starting_nodes', [])
-        entropy_threshold = data.get('entropy_threshold', 0.7)
+        entropy_threshold = data.get('entropy_threshold', 0.4)
         
         if not graph_data or not starting_nodes:
             return jsonify({"error": "Graph data and starting nodes required"}), 400
+        
+        # Use the first starting node for traversal
+        start_node = starting_nodes[0]
+        
+        # Perform entropy-guided traversal
+        traversal_result = entropy_detector.entropy_guided_traversal(
+            graph_data, start_node, entropy_threshold
+        )
+        
+        # Calculate evaluation metrics
+        boundary_nodes = set(traversal_result['boundary_nodes'])
+        evaluation_metrics = entropy_detector.calculate_evaluation_metrics(boundary_nodes)
+        
+        response = {
+            "traversal_result": traversal_result,
+            "evaluation_metrics": evaluation_metrics,
+            "start_node": start_node,
+            "entropy_threshold": entropy_threshold
+        }
+        
+        return jsonify(response)
+        
+    except Exception as e:
+        logger.error(f"Error in graph traversal: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/calculate-entropy', methods=['POST'])
+def calculate_entropy():
+    """Calculate entropy scores for all nodes"""
+    try:
+        data = request.json
+        graph_data = data.get('graph', {})
+        start_node = data.get('start_node', None)
+        
+        if not graph_data:
+            return jsonify({"error": "Graph data required"}), 400
+        
+        # Calculate entropy scores
+        entropy_scores = entropy_detector.calculate_entropy_scores(graph_data, start_node)
+        
+        # Calculate neighborhood entropies
+        neighborhood_entropies = {}
+        for node in graph_data['nodes']:
+            node_id = node['id']
+            neighborhood_entropies[node_id] = entropy_detector.calculate_neighborhood_entropy(graph_data, node_id)
+        
+        response = {
+            "entropy_scores": entropy_scores,
+            "neighborhood_entropies": neighborhood_entropies,
+            "node_embeddings_count": len(entropy_detector.node_embeddings),
+            "start_node": start_node
+        }
+        
+        return jsonify(response)
+        
+    except Exception as e:
+        logger.error(f"Error calculating entropy: {str(e)}")
+        return jsonify({"error": str(e)}), 500
         
         # Perform entropy-based traversal
         traversal_results = entropy_detector.traverse_with_entropy(
@@ -116,5 +182,66 @@ def load_gutenberg():
         logger.error(f"Error loading Gutenberg text: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/embeddings', methods=['POST'])
+def generate_embeddings():
+    """Generate and return node embeddings"""
+    try:
+        data = request.json
+        graph_data = data.get('graph', {})
+        
+        if not graph_data:
+            return jsonify({"error": "Graph data required"}), 400
+        
+        # Generate embeddings
+        embeddings = embedding_generator.generate_node_embeddings(graph_data)
+        
+        # Create data directory if it doesn't exist
+        data_dir = os.path.join(os.path.dirname(__file__), '..', 'data')
+        os.makedirs(data_dir, exist_ok=True)
+        
+        # Save to file
+        embeddings_file = os.path.join(data_dir, 'node_embeddings.json')
+        embedding_generator.save_embeddings(embeddings, embeddings_file)
+        
+        response = {
+            "embeddings": embeddings,
+            "count": len(embeddings),
+            "embedding_dimension": len(list(embeddings.values())[0]) if embeddings else 0,
+            "saved_to": embeddings_file
+        }
+        
+        return jsonify(response)
+        
+    except Exception as e:
+        logger.error(f"Error generating embeddings: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/entropy-score', methods=['POST'])
+def calculate_entropy_between_nodes():
+    """Calculate entropy score between two specific nodes"""
+    try:
+        data = request.json
+        node1_embedding = data.get('node1_embedding', [])
+        node2_embedding = data.get('node2_embedding', [])
+        
+        if not node1_embedding or not node2_embedding:
+            return jsonify({"error": "Both node embeddings required"}), 400
+        
+        # Calculate entropy score
+        entropy_score = embedding_generator.calculate_entropy_score(node1_embedding, node2_embedding)
+        similarity = embedding_generator.calculate_cosine_similarity(node1_embedding, node2_embedding)
+        
+        response = {
+            "entropy_score": entropy_score,
+            "cosine_similarity": similarity,
+            "calculation": "entropy = 1 - cosine_similarity"
+        }
+        
+        return jsonify(response)
+        
+    except Exception as e:
+        logger.error(f"Error calculating entropy score: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5001)

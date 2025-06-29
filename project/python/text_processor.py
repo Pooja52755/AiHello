@@ -200,13 +200,58 @@ class TextProcessor:
             text = re.sub(r'\n{3,}', '\n\n', text)
             text = text.strip()
             
-            # Take first 5000 characters for demo purposes
-            if len(text) > 5000:
-                text = text[:5000] + "..."
+            # Find the actual story beginning - skip table of contents
+            # Look for the first substantial paragraph of narrative text
+            lines = text.split('\n')
+            story_start_idx = 0
+            
+            for i, line in enumerate(lines):
+                line = line.strip()
+                # Skip empty lines
+                if not line:
+                    continue
+                    
+                # Look for the beginning of actual narrative content
+                # Usually starts with "Well, Prince" or similar opening lines
+                if (len(line) > 50 and 
+                    not line.isupper() and 
+                    not line.startswith(('CHAPTER', 'BOOK', 'PART', 'Contents')) and
+                    not re.match(r'^[A-Z\s]{10,}$', line) and
+                    ('Prince' in line or 'Well' in line or 'Genoa' in line or
+                     line.count('.') > 0 or line.count(',') > 2)):
+                    story_start_idx = i
+                    break
+            
+            # Extract the narrative content
+            if story_start_idx > 0:
+                narrative_lines = lines[story_start_idx:]
+                text = '\n'.join(narrative_lines)
+            
+            # Take a substantial portion of the book for analysis
+            # Using 75,000 characters to get multiple chapters with rich content
+            if len(text) > 75000:
+                # Find a good breaking point (end of sentence)
+                break_point = text.rfind('.', 50000, 75000)
+                if break_point > 50000:
+                    text = text[:break_point + 1]
+                else:
+                    text = text[:75000] + "..."
             
             return text
             
         except Exception as e:
             logger.error(f"Error loading Gutenberg text: {e}")
-            # Return sample text as fallback
-            return """War and Peace is a novel by Leo Tolstoy. The book chronicles the French invasion of Russia. Napoleon led his army into Russian territory. The Russian people fought bravely against the invaders. Pierre Bezukhov was one of the main characters. Natasha Rostova loved Prince Andrei. The war changed everyone's lives forever."""
+            # Return a more substantial sample text as fallback
+            return """War and Peace is a novel by Leo Tolstoy that chronicles the French invasion of Russia and the impact of the Napoleonic era on Tsarist society. 
+
+Pierre Bezukhov inherited a vast fortune from his father. The young man struggled with questions of meaning and purpose in life. Natasha Rostova danced gracefully at the ball. Prince Andrei Bolkonsky fought bravely in the battle of Austerlitz. Napoleon Bonaparte led his army across Europe. The French emperor believed he could conquer all of Russia. 
+
+Count Rostov worried about his family's finances. The old man loved his children dearly. Countess Rostova organized magnificent social gatherings. She invited the nobility to her lavish parties. Dolokhov challenged Pierre to a duel. The reckless officer enjoyed gambling and fighting. Princess Marya Bolkonskaya cared for her aging father. The devout woman prayed for peace in troubled times.
+
+Moscow burned during the French occupation. The citizens fled their beloved city. General Kutuzov planned strategic retreats. The wise commander understood Russian winter would defeat the invaders. Soldiers marched through deep snow and bitter cold. Many troops died from hunger and freezing temperatures. The Russian people fought for their homeland's freedom. Patriots resisted the foreign occupation with fierce determination.
+
+Natasha fell in love with Prince Andrei during their engagement. The couple planned a beautiful wedding ceremony. Pierre discovered his wife's infidelity and felt devastated. Helene Kuragina betrayed her husband's trust repeatedly. Count Bezukhov questioned his marriage's true meaning. The philosopher sought spiritual enlightenment through suffering.
+
+Captain Tushin commanded his artillery battery with great skill. The brave officer defended his position against overwhelming odds. Prince Bagration led cavalry charges across bloody battlefields. The general inspired his men through personal courage. Russian soldiers sang folk songs around campfires. The troops shared stories of home and family.
+
+War changed everyone's perspective on life's priorities. Families separated by conflict yearned for reunion. Children grew up without knowing their fathers. Mothers wept for sons who never returned home. The nobility learned that titles meant nothing during crisis. Common people displayed extraordinary heroism under pressure."""

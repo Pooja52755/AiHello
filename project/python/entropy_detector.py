@@ -10,6 +10,8 @@ import torch.nn.functional as F
 from torch_geometric.data import Data
 from torch_geometric.nn import GCNConv
 from sklearn.metrics import f1_score, precision_score, recall_score
+from sklearn.metrics.pairwise import cosine_similarity
+from sentence_transformers import SentenceTransformer
 import random
 
 logger = logging.getLogger(__name__)
@@ -49,7 +51,15 @@ class BLTEntropyModel:
         return self.boundary_predictor(edge_embeddings).squeeze()
 
 class EntropyDetector:
-    def __init__(self):
+    """Enhanced Entropy Detector with Node2Vec-style embeddings for sentence boundary detection"""
+    
+    def __init__(self, embedding_model_name='all-MiniLM-L6-v2'):
+        self.embedding_model = SentenceTransformer(embedding_model_name)
+        self.node_embeddings = {}
+        self.entropy_scores = {}
+        self.boundary_predictions = {}
+        
+        # Additional attributes for enhanced functionality
         self.entropy_threshold = 0.7
         self.max_traversal_depth = 5
         self.min_entropy = 0.1
@@ -59,8 +69,7 @@ class EntropyDetector:
         self.blt_model = BLTEntropyModel()
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
-        # Cache for node embeddings and entropies
-        self.node_embeddings = {}
+        # Cache for edge entropies
         self.edge_entropies = {}
         self._init_models()
         
@@ -68,6 +77,227 @@ class EntropyDetector:
         """Initialize models with default weights"""
         # In a real implementation, you would load pre-trained weights here
         pass
+        
+    def compute_node_embeddings(self, graph_data: Dict[str, Any]) -> Dict[str, np.ndarray]:
+        """Compute embeddings for each node using sentence transformer"""
+        node_embeddings = {}
+        
+        for node in graph_data['nodes']:
+            node_id = node['id']
+            node_label = node['label']
+            
+            # Generate embedding for node label
+            embedding = self.embedding_model.encode([node_label])[0]
+            node_embeddings[node_id] = embedding
+            
+        self.node_embeddings = node_embeddings
+        return node_embeddings
+    
+    def calculate_entropy_scores(self, graph_data: Dict[str, Any], start_node: str = None) -> Dict[str, float]:
+        """Calculate entropy scores for each node relative to a starting node"""
+        
+        # Compute embeddings if not already done
+        if not self.node_embeddings:
+            self.compute_node_embeddings(graph_data)
+        
+        # If no start node specified, use the first node
+        if start_node is None and graph_data['nodes']:
+            start_node = graph_data['nodes'][0]['id']
+        
+        if start_node not in self.node_embeddings:
+            logger.warning(f"Start node {start_node} not found in embeddings")
+            return {}
+        
+        start_embedding = self.node_embeddings[start_node]
+        entropy_scores = {}
+        
+        # Calculate cosine distance as entropy measure
+        for node_id, embedding in self.node_embeddings.items():
+            # Cosine distance (1 - cosine similarity)
+            cosine_sim = cosine_similarity([start_embedding], [embedding])[0][0]
+            entropy_score = 1.0 - cosine_sim
+            
+            # Normalize to [0, 1]
+            entropy_score = max(0.0, min(1.0, entropy_score))
+            entropy_scores[node_id] = float(entropy_score)
+        
+        self.entropy_scores = entropy_scores
+        return entropy_scores
+    
+    def calculate_neighborhood_entropy(self, graph_data: Dict[str, Any], node_id: str) -> float:
+        """Calculate entropy based on neighborhood embedding mean divergence"""
+        
+        if not self.node_embeddings:
+            self.compute_node_embeddings(graph_data)
+        
+        if node_id not in self.node_embeddings:
+            return 0.0
+        
+        # Build adjacency for quick neighbor lookup
+        adjacency = defaultdict(list)
+        for edge in graph_data['edges']:
+            adjacency[edge['source']].append(edge['target'])
+            adjacency[edge['target']].append(edge['source'])
+        
+        neighbors = adjacency[node_id]
+        if not neighbors:
+            return 0.0
+        
+        # Calculate neighborhood mean embedding
+        neighbor_embeddings = []
+        for neighbor in neighbors:
+            if neighbor in self.node_embeddings:
+                neighbor_embeddings.append(self.node_embeddings[neighbor])
+        
+        if not neighbor_embeddings:
+            return 0.0
+        
+        neighborhood_mean = np.mean(neighbor_embeddings, axis=0)
+        node_embedding = self.node_embeddings[node_id]
+        
+        # Calculate divergence (cosine distance)
+        divergence = 1.0 - cosine_similarity([node_embedding], [neighborhood_mean])[0][0]
+        return max(0.0, min(1.0, float(divergence)))
+    
+    def entropy_guided_traversal(self, graph_data: Dict[str, Any], start_node: str, 
+                                entropy_threshold: float = 0.4) -> Dict[str, Any]:
+        """Perform entropy-guided traversal with boundary detection"""
+        
+        # Calculate entropy scores
+        entropy_scores = self.calculate_entropy_scores(graph_data, start_node)
+        
+        # Build adjacency list
+        adjacency = defaultdict(list)
+        for edge in graph_data['edges']:
+            adjacency[edge['source']].append(edge['target'])
+            adjacency[edge['target']].append(edge['source'])
+        
+        # Traversal state
+        visited = set()
+        boundary_nodes = set()
+        traversal_path = []
+        same_sentence_nodes = set()
+        
+        # BFS with entropy-based stopping
+        queue = deque([start_node])
+        visited.add(start_node)
+        same_sentence_nodes.add(start_node)
+        traversal_path.append(start_node)
+        
+        while queue:
+            current_node = queue.popleft()
+            
+            # Explore neighbors
+            for neighbor in adjacency[current_node]:
+                if neighbor not in visited:
+                    neighbor_entropy = entropy_scores.get(neighbor, 0.0)
+                    
+                    # Check if entropy threshold is crossed
+                    if neighbor_entropy > entropy_threshold:
+                        boundary_nodes.add(neighbor)
+                        # Mark as boundary but don't continue traversal from here
+                        visited.add(neighbor)
+                        traversal_path.append(neighbor)
+                    else:
+                        # Continue traversal
+                        visited.add(neighbor)
+                        same_sentence_nodes.add(neighbor)
+                        queue.append(neighbor)
+                        traversal_path.append(neighbor)
+        
+        # Calculate evaluation metrics
+        total_nodes = len(graph_data['nodes'])
+        visited_count = len(same_sentence_nodes)
+        boundary_count = len(boundary_nodes)
+        efficiency = visited_count / total_nodes if total_nodes > 0 else 0.0
+        
+        # Update boundary predictions
+        self.boundary_predictions = {
+            node['id']: node['id'] in boundary_nodes 
+            for node in graph_data['nodes']
+        }
+        
+        return {
+            'traversal_path': traversal_path,
+            'visited_nodes': list(same_sentence_nodes),
+            'boundary_nodes': list(boundary_nodes),
+            'entropy_scores': entropy_scores,
+            'boundary_predictions': self.boundary_predictions,
+            'metrics': {
+                'total_nodes': total_nodes,
+                'visited_count': visited_count,
+                'boundary_count': boundary_count,
+                'efficiency': efficiency,
+                'entropy_threshold': entropy_threshold
+            }
+        }
+    
+    def calculate_evaluation_metrics(self, predicted_boundaries: Set[str], 
+                                   true_boundaries: Set[str] = None) -> Dict[str, float]:
+        """Calculate evaluation metrics for boundary detection"""
+        
+        if true_boundaries is None:
+            # Generate dummy ground truth for demonstration
+            all_nodes = set(self.node_embeddings.keys())
+            # Assume 20% of nodes are true boundaries (random for demo)
+            true_boundaries = set(random.sample(list(all_nodes), 
+                                              max(1, len(all_nodes) // 5)))
+        
+        all_nodes = set(self.node_embeddings.keys())
+        
+        # Convert to binary predictions
+        y_true = [1 if node in true_boundaries else 0 for node in all_nodes]
+        y_pred = [1 if node in predicted_boundaries else 0 for node in all_nodes]
+        
+        # Calculate metrics
+        try:
+            precision = precision_score(y_true, y_pred, zero_division=0)
+            recall = recall_score(y_true, y_pred, zero_division=0)
+            f1 = f1_score(y_true, y_pred, zero_division=0)
+        except:
+            precision = recall = f1 = 0.0
+        
+        return {
+            'precision': float(precision),
+            'recall': float(recall),
+            'f1_score': float(f1),
+            'true_positives': len(predicted_boundaries.intersection(true_boundaries)),
+            'false_positives': len(predicted_boundaries - true_boundaries),
+            'false_negatives': len(true_boundaries - predicted_boundaries),
+            'accuracy': sum(1 for i, pred in enumerate(y_pred) if pred == y_true[i]) / len(y_true)
+        }
+    
+    def calculate_initial_entropy(self, kg_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Calculate initial entropy data for the knowledge graph"""
+        
+        if not kg_data or 'graph' not in kg_data:
+            return {}
+        
+        graph_data = kg_data['graph']
+        
+        # Compute node embeddings
+        self.compute_node_embeddings(graph_data)
+        
+        # Calculate entropy scores for all nodes (using first node as reference)
+        if graph_data['nodes']:
+            start_node = graph_data['nodes'][0]['id']
+            entropy_scores = self.calculate_entropy_scores(graph_data, start_node)
+        else:
+            entropy_scores = {}
+        
+        # Calculate neighborhood entropies
+        neighborhood_entropies = {}
+        for node in graph_data['nodes']:
+            node_id = node['id']
+            neighborhood_entropies[node_id] = self.calculate_neighborhood_entropy(graph_data, node_id)
+        
+        return {
+            'node_entropy_scores': entropy_scores,
+            'neighborhood_entropies': neighborhood_entropies,
+            'mean_entropy': np.mean(list(entropy_scores.values())) if entropy_scores else 0.0,
+            'std_entropy': np.std(list(entropy_scores.values())) if entropy_scores else 0.0,
+            'has_embeddings': len(self.node_embeddings) > 0
+        }
     
     def calculate_initial_entropy(self, graph_data: Dict[str, Any]) -> Dict[str, float]:
         """Calculate initial entropy values for all nodes"""
@@ -390,13 +620,6 @@ class EntropyDetector:
             'num_predictions': len(predictions),
             'num_ground_truth': len(ground_truth)
         }
-            return {
-                'f1_score': 0.0,
-                'precision': 0.0,
-                'recall': 0.0,
-                'boundary_precision': 0.0,
-                'traversal_efficiency': 0.0
-            }
         
         # Calculate F1 score for sentence groupings
         total_f1 = 0.0

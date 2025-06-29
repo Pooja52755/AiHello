@@ -37,134 +37,147 @@ const MetricsPanel: React.FC<MetricsPanelProps> = ({ graphData, traversalResult 
           <span>Traversal Results</span>
         </h4>
 
-        {traversalResult.traversal_results.map((result, index) => (
-          <motion.div
-            key={index}
-            className="bg-gray-800/40 rounded-lg p-4 border border-gray-600"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.1 }}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <h5 className="font-medium text-white">
-                Starting Node: {result.starting_node}
-              </h5>
-              <span className="text-xs bg-blue-600 text-white px-2 py-1 rounded">
-                {result.stopping_reason.replace('_', ' ')}
+        <motion.div
+          className="bg-gray-800/40 rounded-lg p-4 border border-gray-600"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <div className="flex items-center justify-between mb-3">
+            <h5 className="font-medium text-white">
+              Entropy-Based Traversal
+            </h5>
+            <span className="text-xs bg-blue-600 text-white px-2 py-1 rounded">
+              Complete
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <span className="text-gray-400">Visited Nodes:</span>
+              <span className="text-white ml-2 font-medium">
+                {traversalResult.visited_nodes?.length || 0}
               </span>
             </div>
-
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <span className="text-gray-400">Visited Nodes:</span>
-                <span className="text-white ml-2 font-medium">
-                  {result.visited_nodes.length}
-                </span>
-              </div>
-              <div>
-                <span className="text-gray-400">Boundary Nodes:</span>
-                <span className="text-red-400 ml-2 font-medium">
-                  {result.boundary_nodes.length}
-                </span>
-              </div>
-            </div>
-
-            <div className="mt-3">
-              <span className="text-gray-400 text-sm">Entropy Path:</span>
-              <div className="flex flex-wrap gap-1 mt-2">
-                {result.entropy_path.slice(0, 5).map((step, stepIndex) => (
-                  <span
-                    key={stepIndex}
-                    className={`text-xs px-2 py-1 rounded ${
-                      step.entropy > traversalResult.threshold_used
-                        ? 'bg-red-600 text-white'
-                        : 'bg-green-600 text-white'
-                    }`}
-                  >
-                    {step.entropy.toFixed(3)}
-                  </span>
-                ))}
-                {result.entropy_path.length > 5 && (
-                  <span className="text-xs text-gray-400">
-                    +{result.entropy_path.length - 5} more
-                  </span>
-                )}
-              </div>
-            </div>
-          </motion.div>
-        ))}
-
-        <div className="bg-gray-800/40 rounded-lg p-4 border border-gray-600">
-          <h5 className="font-medium text-white mb-3">Summary Statistics</h5>
-          <div className="grid grid-cols-1 gap-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-400">Total Traversals:</span>
-              <span className="text-white">{traversalResult.summary.total_traversals}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-400">Avg Nodes Visited:</span>
-              <span className="text-white">{traversalResult.summary.avg_nodes_visited.toFixed(1)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-400">Avg Boundary Nodes:</span>
-              <span className="text-white">{traversalResult.summary.avg_boundary_nodes.toFixed(1)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-400">Threshold Used:</span>
-              <span className="text-white">{traversalResult.threshold_used.toFixed(2)}</span>
+            <div>
+              <span className="text-gray-400">Boundary Nodes:</span>
+              <span className="text-red-400 ml-2 font-medium">
+                {traversalResult.boundary_nodes?.length || 0}
+              </span>
             </div>
           </div>
-        </div>
+
+          <div className="mt-3">
+            <span className="text-gray-400 text-sm">Traversal Path:</span>
+            <div className="flex flex-wrap gap-1 mt-2">
+              {traversalResult.traversal_path?.slice(0, 8).map((nodeId, stepIndex) => (
+                <span
+                  key={stepIndex}
+                  className={`text-xs px-2 py-1 rounded ${
+                    traversalResult.boundary_nodes?.includes(nodeId)
+                      ? 'bg-red-600 text-white'
+                      : 'bg-green-600 text-white'
+                  }`}
+                >
+                  {nodeId.length > 8 ? nodeId.substring(0, 8) + '...' : nodeId}
+                </span>
+              ))}
+              {traversalResult.traversal_path && traversalResult.traversal_path.length > 8 && (
+                <span className="text-xs px-2 py-1 rounded bg-gray-600 text-white">
+                  +{traversalResult.traversal_path.length - 8} more
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Efficiency Metrics */}
+          <div className="mt-4 pt-3 border-t border-gray-600">
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <span className="text-gray-400">Efficiency:</span>
+                <span className="text-white ml-2 font-medium">
+                  {traversalResult.metrics?.efficiency ? (traversalResult.metrics.efficiency * 100).toFixed(1) : '0'}%
+                </span>
+              </div>
+              <div>
+                <span className="text-gray-400">Threshold:</span>
+                <span className="text-blue-400 ml-2 font-medium">
+                  {traversalResult.metrics?.entropy_threshold?.toFixed(2) || 'N/A'}
+                </span>
+              </div>
+            </div>
+          </div>
+        </motion.div>
       </div>
     );
   };
 
   return (
-    <div className="space-y-6">
-      <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20 shadow-2xl">
-        <div className="flex items-center space-x-3 mb-6">
-          <BarChart className="h-6 w-6 text-blue-300" />
-          <h3 className="text-xl font-bold text-white">Graph Metrics</h3>
-        </div>
+    <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20 shadow-2xl">
+      <div className="flex items-center space-x-3 mb-6">
+        <BarChart className="h-6 w-6 text-blue-300" />
+        <h3 className="text-xl font-bold text-white">Graph Metrics</h3>
+      </div>
 
-        <div className="grid grid-cols-1 gap-4">
+      <div className="space-y-6">
+        {/* Basic Graph Metrics */}
+        <div className="grid grid-cols-2 gap-4">
           {renderMetricCard(
             "Total Nodes",
             graphData.nodes.length,
-            <Target className="h-6 w-6" />,
-            "from-blue-600 to-blue-800"
+            <TrendingUp className="h-5 w-5" />,
+            "from-blue-600 to-blue-700"
           )}
-          
           {renderMetricCard(
             "Total Edges",
             graphData.edges.length,
-            <TrendingUp className="h-6 w-6" />,
-            "from-green-600 to-green-800"
+            <Target className="h-5 w-5" />,
+            "from-green-600 to-green-700"
           )}
-          
-          {renderMetricCard(
-            "Graph Density",
-            (graphData.stats?.density || 0).toFixed(3),
-            <Zap className="h-6 w-6" />,
-            "from-purple-600 to-purple-800"
-          )}
-          
-          {renderMetricCard(
-            "Connected",
-            graphData.stats?.is_connected ? "Yes" : "No",
-            <AlertCircle className="h-6 w-6" />,
-            graphData.stats?.is_connected 
-              ? "from-green-600 to-green-800" 
-              : "from-red-600 to-red-800"
-          )}
+        </div>
+
+        {/* Performance Metrics */}
+        {traversalResult && (
+          <div className="grid grid-cols-2 gap-4">
+            {renderMetricCard(
+              "Visited Nodes",
+              traversalResult.visited_nodes?.length || 0,
+              <Zap className="h-5 w-5" />,
+              "from-purple-600 to-purple-700"
+            )}
+            {renderMetricCard(
+              "Boundary Nodes",
+              traversalResult.boundary_nodes?.length || 0,
+              <AlertCircle className="h-5 w-5" />,
+              "from-red-600 to-red-700"
+            )}
+          </div>
+        )}
+
+        {/* Traversal Results */}
+        {renderTraversalResults()}
+
+        {/* Graph Statistics */}
+        <div className="bg-gray-800/40 rounded-lg p-4 border border-gray-600">
+          <h4 className="text-lg font-semibold text-white mb-3">Graph Statistics</h4>
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="flex justify-between">
+              <span className="text-gray-400">Avg Node Degree:</span>
+              <span className="text-white">
+                {graphData.edges.length > 0 ? (graphData.edges.length * 2 / graphData.nodes.length).toFixed(1) : '0'}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-400">Graph Density:</span>
+              <span className="text-white">
+                {graphData.nodes.length > 1 ? 
+                  ((graphData.edges.length / (graphData.nodes.length * (graphData.nodes.length - 1) / 2)) * 100).toFixed(1) + '%' : 
+                  '0%'
+                }
+              </span>
+            </div>
+          </div>
         </div>
       </div>
-
-      {traversalResult && (
-        <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20 shadow-2xl">
-          {renderTraversalResults()}
-        </div>
-      )}
     </div>
   );
 };

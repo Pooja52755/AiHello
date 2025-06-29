@@ -18,13 +18,6 @@ export interface GraphEdge {
 export interface GraphData {
   nodes: GraphNode[];
   edges: GraphEdge[];
-  sentences: { [key: number]: { id: number; text: string; nodes: string[] } };
-  stats: {
-    num_nodes: number;
-    num_edges: number;
-    density: number;
-    is_connected: boolean;
-  };
 }
 
 export interface TraversalStep {
@@ -42,24 +35,36 @@ export interface EntropyPath {
   depth: number;
 }
 
-export interface TraversalResultItem {
-  starting_node: string;
+export interface TraversalResult {
+  traversal_path: string[];
   visited_nodes: string[];
   boundary_nodes: string[];
-  entropy_path: EntropyPath[];
-  traversal_steps: TraversalStep[];
-  stopping_reason: string;
+  entropy_scores: { [nodeId: string]: number };
+  boundary_predictions: { [nodeId: string]: boolean };
+  metrics: {
+    total_nodes: number;
+    visited_count: number;
+    boundary_count: number;
+    efficiency: number;
+    entropy_threshold: number;
+  };
 }
 
-export interface TraversalResult {
-  traversal_results: TraversalResultItem[];
-  entropy_values: { [key: string]: number };
-  threshold_used: number;
-  summary: {
-    total_traversals: number;
-    avg_nodes_visited: number;
-    avg_boundary_nodes: number;
-  };
+export interface EvaluationMetrics {
+  precision: number;
+  recall: number;
+  f1_score: number;
+  true_positives: number;
+  false_positives: number;
+  false_negatives: number;
+  accuracy: number;
+}
+
+export interface TraversalApiResponse {
+  traversal_result: TraversalResult;
+  evaluation_metrics: EvaluationMetrics;
+  start_node: string;
+  entropy_threshold: number;
 }
 
 export interface ApiResponse {
@@ -80,4 +85,17 @@ export interface ApiResponse {
     num_nodes: number;
     num_edges: number;
   };
+}
+
+// Legacy support
+export interface Node {
+  id: string;
+  label: string;
+  type?: string;
+}
+
+export interface Edge {
+  source: string;
+  target: string;
+  label?: string;
 }

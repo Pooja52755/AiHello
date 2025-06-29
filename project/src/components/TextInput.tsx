@@ -36,7 +36,7 @@ const TextInput: React.FC<TextInputProps> = ({ onTextProcess, loading }) => {
   const loadGutenbergText = async () => {
     setLoadingGutenberg(true);
     try {
-      const response = await fetch('http://localhost:5000/api/load-gutenberg', {
+      const response = await fetch('http://localhost:5001/api/load-gutenberg', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -50,7 +50,7 @@ const TextInput: React.FC<TextInputProps> = ({ onTextProcess, loading }) => {
 
       const data = await response.json();
       setText(data.text);
-      toast.success('Loaded War and Peace text from Project Gutenberg');
+      toast.success(`Loaded War and Peace text (${Math.round(data.text.length / 1000)}k characters) from Project Gutenberg`);
     } catch (error) {
       console.error('Error loading text:', error);
       toast.error('Failed to load text from Project Gutenberg');

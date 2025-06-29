@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Play, Settings, Target, Loader2 } from 'lucide-react';
+import { Play, Settings, Target, Loader2, Calculator } from 'lucide-react';
 import { GraphNode } from '../types';
 
 interface TraversalControlProps {
@@ -11,6 +11,10 @@ interface TraversalControlProps {
   entropyThreshold: number;
   onThresholdChange: (threshold: number) => void;
   loading: boolean;
+  onCalculateEntropy?: () => void;
+  onGenerateEmbeddings?: () => void;
+  embeddingsLoaded?: boolean;
+  entropyScores?: { [nodeId: string]: number };
 }
 
 const TraversalControl: React.FC<TraversalControlProps> = ({
@@ -21,6 +25,10 @@ const TraversalControl: React.FC<TraversalControlProps> = ({
   entropyThreshold,
   onThresholdChange,
   loading,
+  onCalculateEntropy,
+  onGenerateEmbeddings,
+  embeddingsLoaded,
+  entropyScores = {},
 }) => {
   const handleTraversal = () => {
     if (selectedNodes.length === 0) {
@@ -61,6 +69,11 @@ const TraversalControl: React.FC<TraversalControlProps> = ({
                 <div className="text-xs opacity-75">
                   Sentences: {node.sentence_ids.join(', ')}
                 </div>
+                {entropyScores[node.id] && (
+                  <div className="text-xs text-blue-300 mt-1">
+                    Entropy: {entropyScores[node.id].toFixed(3)}
+                  </div>
+                )}
               </motion.button>
             ))}
           </div>
@@ -107,6 +120,19 @@ const TraversalControl: React.FC<TraversalControlProps> = ({
             </div>
           </div>
 
+          {onCalculateEntropy && (
+            <motion.button
+              onClick={onCalculateEntropy}
+              disabled={loading}
+              className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-xl shadow-lg transition-all duration-200 mb-4"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <Calculator className="h-4 w-4" />
+              <span>Calculate Entropy Scores</span>
+            </motion.button>
+          )}
+
           <motion.button
             onClick={handleTraversal}
             disabled={loading}
@@ -123,6 +149,28 @@ const TraversalControl: React.FC<TraversalControlProps> = ({
               {loading ? 'Traversing...' : 'Start Entropy Traversal'}
             </span>
           </motion.button>
+
+          {onGenerateEmbeddings && (
+            <motion.button
+              onClick={onGenerateEmbeddings}
+              disabled={loading || embeddingsLoaded}
+              className={`w-full flex items-center justify-center space-x-2 px-6 py-4 rounded-xl shadow-lg transition-all duration-200 ${
+                embeddingsLoaded
+                  ? 'bg-green-600 hover:bg-green-700 text-white'
+                  : 'bg-blue-600 hover:bg-blue-700 text-white'
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              {loading ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : embeddingsLoaded ? (
+                <span>✔️ Embeddings Loaded</span>
+              ) : (
+                <span>Generate Embeddings</span>
+              )}
+            </motion.button>
+          )}
         </div>
       </div>
     </div>
